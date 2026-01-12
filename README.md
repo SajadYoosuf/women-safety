@@ -1,72 +1,63 @@
-# SafeStep - Women Safety App
+# SafeStep - Women's Safety Application
 
-SafeStep is a stealthy, background-running safety application built with Flutter. It detects emergencies via voice commands ("Help"/"SOS") or phone shaking and instantly sends your GPS location to trusted contacts.
+SafeStep is a high-performance Flutter application designed to provide immediate assistance and monitoring for personal safety. It integrates advanced detection mechanisms with automated emergency responses to ensure peace of mind.
 
-## 🚀 Features
-- **Stealth Mode**: Runs in background, looks like a calculator (optional overly).
-- **Multi-Trigger Detection**: Shake, Voice, and Gesture.
-- **Instant Alerts**: Sends SMS with Google Maps link.
-- **Firebase Integration**: securely stores emergency contacts.
+## 🚀 Key Features
 
-## 🛠 Project Setup
+### 1. **AI-Powered Emergency Detection**
+*   **Gesture Recognition**: Uses `sensors_plus` and a movement-pattern analyzer to detect struggle gestures or sudden abnormal movements.
+*   **Shake-to-Alert**: Instantly triggers an emergency signal when the device is shaken vigorously.
+*   **Voice Phrase Recognition**: Hands-free SOS activation using keywords like "Help", "SOS", or "Save me" (even when the app is in the background).
 
-### 1. Prerequisites
-- Flutter SDK (3.x+)
-- Android Studio / VS Code
-- Firebase CLI (`npm install -g firebase-tools`)
+### 2. **Silent & Discreet Operation**
+*   **Stealth Mode (Notes App)**: A disguised interface that looks like a Note Taker app. Users can access the real SOS dashboard via a secret long-press or typed command.
+*   **Ambient Audio Recording**: Automatically captures 30 seconds of high-quality ambient audio upon SOS trigger for evidence gathering.
+*   **Active Guardian Monitoring**: Runs a low-energy foreground service that keeps monitoring active even when the phone is locked.
 
-### 2. Installation
-```bash
-# Clone or Unzip project
-cd safestep
+### 3. **Automated Response & Reliability**
+*   **Precision Location Tracking**: Fetches high-accuracy GPS coordinates at the moment of trigger.
+*   **Instant SMS Alerts**: Pre-populates emergency messages with a live Google Maps link.
+*   **Offline Support**: Caches emergency contacts locally to ensure alerts can still be prepared in low-network situations.
 
-# Install dependencies
-flutter pub get
-```
+### 4. **Secure Data Management**
+*   **Firebase Authentication**: Secure user accounts and session management.
+*   **Cloud Contact Sync**: Emergency contacts are saved securely in the cloud (Firestore) and synced across devices.
+*   **Trusted Contacts**: Manage up to 5 emergency contacts with verified phone numbers.
 
-### 3. Firebase Configuration
-This app uses Firebase Auth and Firestore. You must configure it for your project:
+## 🛠 Tech Stack
+*   **Frontend**: Flutter (Dart)
+*   **Backend**: Firebase (Auth, Firestore)
+*   **Detection**: Speech-to-Text, Shake, Geolocator
+*   **Service**: Flutter Background Service
 
-1. Create a project at [console.firebase.google.com](https://console.firebase.google.com/).
-2. Enable **Authentication** (Email/Password).
-3. Enable **Cloud Firestore** and set rules (see below).
-4. Run FlutterFire configuration:
-```bash
-flutterfire configure
-```
-Select "safestep" (or your project) and the platforms (Android/iOS).
-This will generate `lib/firebase_options.dart`.
+## 📱 Android Implementation & Testing Notes
 
-5. **Uncomment** the `firebase_options.dart` import in `lib/services/background_service.dart` and `lib/main.dart` if it was commented out.
+### Permissions Required
+The following permissions must be granted for full functionality:
+- `Location`: For sending your exact coordinates.
+- `Microphone`: For voice recognition monitoring.
+- `SMS`: To launch the messaging application.
+- `Background Execution`: To ensure monitoring doesn't stop when you lock your phone.
 
-### 4. TFLite Model Setup (Optional for Voice)
-The app includes a fallback to standard Speech-to-Text. For offline custom model usage:
-1. Train a model using [Teachable Machine](https://teachablemachine.withgoogle.com/train/audio) for words "Help" and "SOS".
-2. Download the `.tflite` file.
-3. Rename it to `voice_help.tflite` and place it in `assets/models/`.
-4. Uncomment the TFLite logic in `lib/services/emergency_detector.dart` (currently configured for standard SpeechToText for easier setup).
+### Android Testing Checklist & Fixes
+- [x] **Foreground Service Type**: Configured as `location|microphone` in `AndroidManifest` for Android 14 compatibility.
+- [x] **Kotin Upgrade**: Successfully migrated to **Kotlin 2.1.0** to meet modern Flutter SDK requirements.
+- [x] **Plugin Compatibility**: Upgraded `speech_to_text` to **7.3.0** to resolve compilation errors with the new Flutter embedding.
+- [x] **Gradle Strategy**: Implemented a resolution strategy to ensure `kotlin-stdlib` alignment across all plugins.
 
-### 5. Permissions
-The app requires the following permissions on Android (already added to manifest):
-- Location (Background)
-- SMS (via URL scheme)
-- Microphone
-- System Alert Window (for overlays)
+### Known Platform Behavior
+- **SMS Multi-send**: On Android, the system will open the default SMS app. The user may need to press "Send" due to modern Android security restrictions on automated background SMS (unless special permissions are requested).
+- **Voice Recognition**: Background voice recognition performance varies by device; "On-device" mode is enabled to improve latency.
 
-## 📱 Architecture
-- **MVVM**: Clean separation of Views, ViewModels (Providers), and Models.
-- **Services**: `EmergencyDetector`, `BackgroundService`, `AuthService`.
-- **State Management**: Provider.
+## 🏗 Setup Instructions
+1.  **Clone the repository**: `git clone <repo-url>`
+2.  **Install dependencies**: `flutter pub get`
+3.  **Firebase Setup**:
+    -   Create a project on Firebase Console.
+    -   Add Android/iOS apps.
+    -   Download `google-services.json` / `GoogleService-Info.plist`.
+    -   Run `flutterfire configure`.
+4.  **Run the app**: `flutter run`
 
-## 🧪 Testing
-1. **Login**: Create an account.
-2. **Setup**: Add emergency contacts in the specific screen.
-3. **Start Service**: Toggle "Start" on Home Screen. Status should verify "Protected".
-4. **Test**: Long press the SOS button or Shake the phone.
-
-## 🔒 Logic Details
-- `EmergencyDetector`: Listens to sensor streams.
-- `AlertService`: Fetches current GPS coordinates and iterates through Firestore contacts to construct the SMS.
-
-## ⚠️ Note
-For production use, ensure you comply with Google Play/App Store policies regarding Background Location and SMS permissions.
+---
+*Built with ❤️ for safety and peace of mind.*

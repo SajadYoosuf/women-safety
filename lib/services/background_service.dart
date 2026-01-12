@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:safestep/services/emergency_detector.dart';
 import 'package:firebase_core/firebase_core.dart';
-// import '../firebase_options.dart'; // Uncomment after configuration
+import '../firebase_options.dart';
 
 Future<void> initializeService() async {
   if (kIsWeb) return; // Background service is not supported on Web
@@ -35,8 +35,7 @@ void onStart(ServiceInstance service) async {
   
   // Initialize Firebase for the background isolate
   try {
-     // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform); 
-     await Firebase.initializeApp(); // Use default if configured or auto-configured
+     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform); 
   } catch (e) {
     debugPrint("Firebase background init error: $e");
   }
@@ -56,9 +55,17 @@ void onStart(ServiceInstance service) async {
   });
 
   // Start the Emergency Detector
-  EmergencyDetector().startMonitoring();
+  debugPrint("Background Isolate: Initializing Monitoring...");
+  try {
+    EmergencyDetector().startMonitoring();
+    debugPrint("Background Isolate: Monitoring started successfully.");
+  } catch (e) {
+    debugPrint("Background Isolate Error during startMonitoring: $e");
+  }
   
   // Keep alive logic if needed (Timer)
+  // Note: isForegroundService() can throw exceptions in background isolates in some plugin versions
+  /*
   Timer.periodic(const Duration(seconds: 30), (timer) async {
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
@@ -69,6 +76,7 @@ void onStart(ServiceInstance service) async {
       }
     }
   });
+  */
 }
 
 @pragma('vm:entry-point')

@@ -50,9 +50,9 @@ class AuthService {
   }
 
   Future<void> updateContacts(String uid, List<ContactModel> contacts) async {
-    await _firestore.collection('users').doc(uid).update({
+    await _firestore.collection('users').doc(uid).set({
       'emergencyContacts': contacts.map((e) => e.toMap()).toList(),
-    });
+    }, SetOptions(merge: true));
   }
 
   Future<void> signOut() async {

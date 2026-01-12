@@ -1,90 +1,90 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:shake/shake.dart';
-import 'package:speech_to_text/speech_to_text.dart';
+import 'package:flutter/foundation.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:perfect_volume_control/perfect_volume_control.dart';
 import 'alert_service.dart';
+import 'gesture_classifier.dart';
 
 class EmergencyDetector {
   static final EmergencyDetector _instance = EmergencyDetector._internal();
   factory EmergencyDetector() => _instance;
   EmergencyDetector._internal();
 
-  ShakeDetector? _shakeDetector;
-  final SpeechToText _speech = SpeechToText();
-  bool _isListening = false;
-  Timer? _voiceTimer;
+  bool _isMonitoring = false;
+  StreamSubscription<AccelerometerEvent>? _accelSubscription;
+  StreamSubscription<double>? _volumeSubscription;
+  
+  // To detect rapid clicks
+  int _volumeClickCount = 0;
+  DateTime? _lastVolumeClick;
 
-  void startMonitoring() {
+  Future<void> startMonitoring() async {
+    if (_isMonitoring) return;
+    _isMonitoring = true;
     debugPrint("Starting Emergency Monitoring...");
     
-    // 1. Shake Detection
-    _shakeDetector = ShakeDetector.autoStart(
-      onPhoneShake: (_) {
-        debugPrint("Shake detected!");
-        AlertService().triggerAlert();
-      },
-      minimumShakeCount: 2,
-      shakeSlopTimeMS: 500,
-      shakeThresholdGravity: 2.7,
-    );
+    final prefs = await SharedPreferences.getInstance();
+
+    // 1. Custom Shake Detection
+    try {
+      if (prefs.getBool('shake_enabled') ?? true) {
+        double thresholdX = prefs.getDouble('shake_threshold_x') ?? 25.0;
+        double thresholdY = prefs.getDouble('shake_threshold_y') ?? 25.0;
+        double thresholdZ = prefs.getDouble('shake_threshold_z') ?? 25.0;
+
+        _accelSubscription = accelerometerEventStream().listen((event) {
+          if (event.x.abs() > thresholdX || event.y.abs() > thresholdY || event.z.abs() > thresholdZ) {
+            debugPrint("EmergencyDetector: SHAKE DETECTED");
+            AlertService().triggerAlert();
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("EmergencyDetector: Shake Detection Error: $e");
+    }
+
+    // 2. Hardware Button (Volume) Triggers
+    try {
+      if (prefs.getBool('hold_button_enabled') ?? true) {
+        _volumeSubscription = PerfectVolumeControl.stream.listen((volume) {
+          final now = DateTime.now();
+          if (_lastVolumeClick == null || now.difference(_lastVolumeClick!) < const Duration(milliseconds: 1000)) {
+            _volumeClickCount++;
+          } else {
+            _volumeClickCount = 1;
+          }
+          _lastVolumeClick = now;
+
+          // Trigger on 3 rapid volume changes (clicks)
+          if (_volumeClickCount >= 3) {
+            debugPrint("EmergencyDetector: RAPID BUTTON PRESS DETECTED");
+            _volumeClickCount = 0;
+            AlertService().triggerAlert();
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("EmergencyDetector: Button Trigger Error: $e");
+    }
     
-    // 2. Voice Detection (Periodic listening to save battery or continuous)
-    // Continuous listing in background is battery heavy and restricted on Android.
-    // We will attempt to initialize it.
-    _initSpeech();
+    // 3. AI Gesture Detection (Legacy)
+    try {
+      GestureClassifier().init();
+      GestureClassifier().start();
+    } catch (e) {
+      debugPrint("EmergencyDetector: Gesture Classifier Error: $e");
+    }
+
+    // 4. Voice Command (Placeholder - logic removed due to plugin incompatibility)
+    debugPrint("Voice detection placeholder active.");
   }
 
   void stopMonitoring() {
-    _shakeDetector?.stopListening();
-    _stopListening();
-  }
-
-  Future<void> _initSpeech() async {
-    bool available = await _speech.initialize(
-      onStatus: (status) => debugPrint('Speech Status: $status'),
-      onError: (error) => debugPrint('Speech Error: $error'),
-    );
-
-    if (available) {
-      // Listen periodically
-      _voiceTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-         if (!_isListening) {
-           _listen();
-         }
-      });
-    }
-  }
-
-  void _listen() async {
-    if (_isListening) return;
-    _isListening = true;
-    
-    await _speech.listen(
-      onResult: (result) {
-        String words = result.recognizedWords.toLowerCase();
-        if (words.contains("help") || words.contains("sos") || words.contains("save me")) {
-           AlertService().triggerAlert();
-        }
-      },
-      listenFor: const Duration(seconds: 5),
-      pauseFor: const Duration(seconds: 2),
-      localeId: "en_US", 
-      listenOptions: SpeechListenOptions(
-        partialResults: true,
-        cancelOnError: true,
-        listenMode: ListenMode.dictation,
-        onDevice: true, // Forces offline recognition if available
-      ),
-    );
-    
-    // Reset listening state after a bit
-    Future.delayed(const Duration(seconds: 6), () {
-      _isListening = false;
-    });
-  }
-  
-  void _stopListening() {
-    _voiceTimer?.cancel();
-    _speech.stop();
+    _isMonitoring = false;
+    _accelSubscription?.cancel();
+    _volumeSubscription?.cancel();
+    GestureClassifier().stop();
+    _volumeClickCount = 0;
   }
 }

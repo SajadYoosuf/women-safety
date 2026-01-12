@@ -8,19 +8,15 @@ import 'views/auth_screen.dart';
 import 'views/home_screen.dart';
 import 'views/contacts_screen.dart';
 import 'config/theme.dart';
+import 'views/stealth_screen.dart';
 import 'firebase_options.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
-);
-  WidgetsFlutterBinding.ensureInitialized();
-  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform); 
-  // User must configure firebase. For now we wrap in try-catch or just allow it to fail in dev
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint("Firebase init failed (expected before setup): $e");
-  }
+  );
 
   await initializeService();
 
@@ -44,27 +40,60 @@ class MyApp extends StatelessWidget {
         title: 'SafeStep',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
+        themeMode: ThemeMode.light,
         home: const AuthWrapper(),
         routes: {
           '/home': (context) => const HomeScreen(),
           '/contacts': (context) => const ContactsSetupScreen(),
           '/auth': (context) => const AuthScreen(),
+          '/stealth': (context) => const StealthScreen(),
         },
       ),
     );
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
-  
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  Future<bool>? _stealthFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _stealthFuture = _isStealthEnabled();
+  }
+
+  Future<bool> _isStealthEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('stealth_mode') ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<User?>(); // Firebase User
+    final user = context.watch<User?>();
+    
     if (user != null) {
-      return const HomeScreen();
+      return FutureBuilder<bool>(
+        future: _stealthFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              backgroundColor: Colors.white,
+              body: Center(child: CircularProgressIndicator(color: Colors.black)),
+            );
+          }
+          if (snapshot.data == true) {
+            return const StealthScreen();
+          }
+          return const HomeScreen();
+        },
+      );
     }
     return const AuthScreen();
   }
