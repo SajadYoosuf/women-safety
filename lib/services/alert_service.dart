@@ -22,20 +22,23 @@ class AlertService {
   Future<void> triggerAlert() async {
     if (_isAlertInProgress) return;
     _isAlertInProgress = true;
-    
+
     debugPrint("🚨 EMERGENCY TRIGGERED 🚨");
-    
+
     // Immediate haptic feedback - Wrapped in try-catch to avoid background isolate crashes
     try {
       if (await Vibration.hasVibrator() ?? false) {
-        Vibration.vibrate(pattern: [0, 500, 200, 500], intensities: [0, 255, 0, 255]);
+        Vibration.vibrate(
+          pattern: [0, 500, 200, 500],
+          intensities: [0, 255, 0, 255],
+        );
       }
     } catch (e) {
       debugPrint("Vibration failed (common in background isolates): $e");
     }
 
-    String message = "🚨 EMERGENCY 🚨\nSomeone needs HELP!"; 
-    
+    String message = "🚨 EMERGENCY 🚨\nSomeone needs HELP!";
+
     // 1. Get Location
     Position? position;
     try {
@@ -60,9 +63,13 @@ class AlertService {
 
       if (user != null) {
         try {
-          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
           if (userDoc.exists) {
-            Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+            Map<String, dynamic> userData =
+                userDoc.data() as Map<String, dynamic>;
             contacts = userData['emergencyContacts'] ?? [];
             name = userData['name'] ?? 'User';
           }
@@ -80,21 +87,32 @@ class AlertService {
         }
       }
 
-      String locString = position != null 
-          ? "Location: https://maps.google.com/?q=${position.latitude},${position.longitude}" 
+      String locString = position != null
+          ? "Location: https://maps.google.com/?q=${position.latitude},${position.longitude}"
           : "Location unavailable.";
-      
+
       message = "🚨 EMERGENCY 🚨\n$name needs HELP!\n$locString";
 
       // 3. Send SMS Automatically
       if (contacts.isNotEmpty) {
         for (var contact in contacts) {
-          String phone = contact['phone'];
+          String phone = contact['phone'].toString().replaceAll(
+            RegExp(r'\s+'),
+            '',
+          );
+
+          // Ensure +91 for Indian numbers if only 10 digits provided
+          if (phone.length == 10 && !phone.startsWith('+')) {
+            phone = "+91$phone";
+          }
+
           debugPrint("Attempting background SMS to $phone");
           try {
             bool success = await SmsService().sendSms(phone, message);
             if (!success) {
-              debugPrint("Background SMS failed for $phone. Attempting UI fallback if possible.");
+              debugPrint(
+                "Background SMS failed for $phone. Attempting UI fallback if possible.",
+              );
               await _launchSmsFallback(phone, message);
             }
           } catch (e) {
@@ -108,7 +126,6 @@ class AlertService {
 
       // 4. Record Ambient Audio in background
       _recordAmbientAudio();
-
     } catch (e) {
       debugPrint("Error in triggerAlert flow: $e");
     } finally {
@@ -124,11 +141,12 @@ class AlertService {
     try {
       if (await record.hasPermission()) {
         final dir = await getApplicationDocumentsDirectory();
-        final path = '${dir.path}/emergency_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        
+        final path =
+            '${dir.path}/emergency_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
         await record.start(const RecordConfig(), path: path);
         debugPrint("Recording ambient audio to $path");
-        
+
         // Record for 60 seconds then stop
         await Future.delayed(const Duration(seconds: 60));
         await record.stop();
@@ -146,18 +164,22 @@ class AlertService {
       final Uri smsLaunchUri = Uri(
         scheme: 'sms',
         path: phone,
-        queryParameters: <String, String>{
-          'body': message,
-        },
+        queryParameters: <String, String>{'body': message},
       );
-      
-      // url_launcher requires a foreground activity. 
+
+      // url_launcher requires a foreground activity.
       // This will throw PlatformException(NO_ACTIVITY) if called from background.
       if (await canLaunchUrl(smsLaunchUri)) {
+        debugPrint("Attempting UI-based SMS fallback for $phone...");
         await launchUrl(smsLaunchUri, mode: LaunchMode.externalApplication);
+      } else {
+        debugPrint("Cannot launch SMS URL for $phone");
       }
     } catch (e) {
-      debugPrint("Could not launch SMS fallback: $e. Likely background isolate/locked screen.");
+      // This is expected in background isolates
+      debugPrint(
+        "SMS fallback failed (Expected in background/locked screen): $e",
+      );
     }
   }
 }

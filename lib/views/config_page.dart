@@ -4,6 +4,8 @@ import '../services/shake_trainer.dart';
 import '../services/background_service.dart';
 import 'complaints_page.dart';
 import 'voice_training_page.dart';
+import '../services/voice_service.dart';
+import '../services/emergency_detector.dart';
 
 class ConfigurationPage extends StatefulWidget {
   const ConfigurationPage({super.key});
@@ -17,7 +19,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
   bool _isShakeEnabled = true;
   bool _isVoiceEnabled = true;
   bool _isHoldButtonEnabled = true;
-  
+
   double _trainingProgress = 0.0;
   bool _isTraining = false;
 
@@ -43,9 +45,20 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     setState(() {
       if (key == 'background_service_active') _isBackgroundActive = value;
       if (key == 'shake_enabled') _isShakeEnabled = value;
-      if (key == 'voice_enabled') _isVoiceEnabled = value;
+      if (key == 'voice_enabled') {
+        _isVoiceEnabled = value;
+        if (value) {
+          VoiceService().init().then((_) => VoiceService().startListening());
+        } else {
+          VoiceService().stopListening();
+        }
+      }
       if (key == 'hold_button_enabled') _isHoldButtonEnabled = value;
     });
+
+    // Refresh detector if monitoring is active
+    EmergencyDetector().stopMonitoring();
+    EmergencyDetector().startMonitoring();
   }
 
   void _startShakeTraining() {
@@ -75,7 +88,10 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Settings & Triggers", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: const Text(
+          "Settings & Triggers",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+        ),
         elevation: 0,
         backgroundColor: Colors.white,
         centerTitle: true,
@@ -95,7 +111,7 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
             _isBackgroundActive,
             (val) => _saveSetting('background_service_active', val),
           ),
-          
+
           const SizedBox(height: 24),
           _buildHeader("Emergency Triggers"),
           _buildTriggerCard(
@@ -104,15 +120,18 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
             "Trigger alert by shaking your phone vigorously.",
             _isShakeEnabled,
             (val) => _saveSetting('shake_enabled', val),
-            action: _isTraining 
-              ? LinearProgressIndicator(value: _trainingProgress, borderRadius: BorderRadius.circular(10))
-              : TextButton.icon(
-                  onPressed: _startShakeTraining,
-                  icon: const Icon(Icons.model_training, size: 18),
-                  label: const Text("Train Sensitivity"),
-                ),
+            action: _isTraining
+                ? LinearProgressIndicator(
+                    value: _trainingProgress,
+                    borderRadius: BorderRadius.circular(10),
+                  )
+                : TextButton.icon(
+                    onPressed: _startShakeTraining,
+                    icon: const Icon(Icons.model_training, size: 18),
+                    label: const Text("Train Sensitivity"),
+                  ),
           ),
-          
+
           const SizedBox(height: 16),
           _buildTriggerCard(
             Icons.record_voice_over_outlined,
@@ -122,13 +141,18 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
             (val) => _saveSetting('voice_enabled', val),
             action: TextButton.icon(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const VoiceTrainingPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const VoiceTrainingPage(),
+                  ),
+                );
               },
               icon: const Icon(Icons.mic, size: 18),
               label: const Text("Setup Voice"),
             ),
           ),
-          
+
           const SizedBox(height: 16),
           _buildTriggerCard(
             Icons.touch_app_outlined,
@@ -144,7 +168,10 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
             Icons.feedback_outlined,
             "Submit a Complaint",
             "Report issues or suggest improvements.",
-            () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ComplaintsPage())),
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ComplaintsPage()),
+            ),
           ),
           const SizedBox(height: 40),
         ],
@@ -157,12 +184,23 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
       padding: const EdgeInsets.only(left: 4, bottom: 12),
       child: Text(
         title,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54, letterSpacing: 1.1),
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Colors.black54,
+          letterSpacing: 1.1,
+        ),
       ),
     );
   }
 
-  Widget _buildToggleCard(IconData icon, String title, String subtitle, bool value, Function(bool) onChanged) {
+  Widget _buildToggleCard(
+    IconData icon,
+    String title,
+    String subtitle,
+    bool value,
+    Function(bool) onChanged,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
@@ -180,13 +218,24 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     );
   }
 
-  Widget _buildTriggerCard(IconData icon, String title, String subtitle, bool value, Function(bool) onChanged, {Widget? action}) {
+  Widget _buildTriggerCard(
+    IconData icon,
+    String title,
+    String subtitle,
+    bool value,
+    Function(bool) onChanged, {
+    Widget? action,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: value ? Colors.black.withOpacity(0.02) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: value ? Colors.black.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
+        border: Border.all(
+          color: value
+              ? Colors.black.withOpacity(0.1)
+              : Colors.black.withOpacity(0.05),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,8 +248,20 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.5))),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.5),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -220,7 +281,12 @@ class _ConfigurationPageState extends State<ConfigurationPage> {
     );
   }
 
-  Widget _buildListTile(IconData icon, String title, String subtitle, VoidCallback onTap) {
+  Widget _buildListTile(
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       onTap: onTap,
       leading: Icon(icon, color: Colors.black),

@@ -1,0 +1,19 @@
+name: sms_sender
+description: A local plugin for sending SMS in background.
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.0.0
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.example.sms_sender
+        pluginClass: SmsSenderPlugin

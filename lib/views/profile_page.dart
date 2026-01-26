@@ -1,11 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
-import '../models/user_model.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../services/auth_service.dart';
+import '../services/sms_service.dart';
+import '../models/user_model.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  List<Map<String, dynamic>> _simCards = [];
+  int? _selectedSubId;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _loadSimCards();
+  }
+
+  Future<void> _loadSimCards() async {
+    // Request permission if not granted
+    var status = await Permission.phone.status;
+    if (!status.isGranted) {
+      status = await Permission.phone.request();
+    }
+
+    if (status.isGranted) {
+      final sims = await SmsService().getSimCards();
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _simCards = sims;
+        _selectedSubId = prefs.getInt('preferred_sim_id');
+      });
+    }
+  }
+
+  Future<void> _selectSim(int subId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('preferred_sim_id', subId);
+    setState(() {
+      _selectedSubId = subId;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,10 +56,7 @@ class ProfilePage extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Profile"),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text("Profile"), centerTitle: true),
       body: FutureBuilder<UserModel?>(
         future: user != null ? authService.getUser(user.uid) : null,
         builder: (context, snapshot) {
@@ -24,7 +64,7 @@ class ProfilePage extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           final userData = snapshot.data;
-          
+
           return ListView(
             padding: const EdgeInsets.all(24),
             children: [
@@ -36,9 +76,51 @@ class ProfilePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 30),
-              _buildInfoTile("Name", userData?.name ?? "N/A", Icons.person_outline),
-              _buildInfoTile("Phone", userData?.phone ?? "N/A", Icons.phone_outlined),
-              _buildInfoTile("UID", user?.uid ?? "N/A", Icons.fingerprint),
+              _buildInfoTile(
+                "Name",
+                userData?.name ?? "N/A",
+                Icons.person_outline,
+              ),
+              _buildInfoTile(
+                "Phone",
+                userData?.phone ?? "N/A",
+                Icons.phone_outlined,
+              ),
+
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "SOS SIM Settings",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    onPressed: _loadSimCards,
+                    tooltip: "Refresh SIM List",
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_simCards.isEmpty)
+                const Text(
+                  "No SIM cards detected or permission missing.",
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                )
+              else
+                ..._simCards.map(
+                  (sim) => RadioListTile<int>(
+                    title: Text(sim['name'] ?? 'SIM'),
+                    subtitle: Text("${sim['carrier']} (${sim['number']})"),
+                    value: sim['id'],
+                    groupValue: _selectedSubId,
+                    onChanged: (val) {
+                      if (val != null) _selectSim(val);
+                    },
+                  ),
+                ),
+
               const SizedBox(height: 40),
               ElevatedButton(
                 onPressed: () => authService.signOut(),
@@ -48,7 +130,10 @@ class ProfilePage extends StatelessWidget {
                   elevation: 0,
                   minimumSize: const Size(double.infinity, 50),
                 ),
-                child: const Text("Sign Out", style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text(
+                  "Sign Out",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           );
@@ -62,8 +147,18 @@ class ProfilePage extends StatelessWidget {
       children: [
         ListTile(
           leading: Icon(icon, color: Colors.blueGrey),
-          title: Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          subtitle: Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+          title: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          subtitle: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
         ),
         const Divider(),
       ],
